@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StudySync — Deadlines & Smart Reminders</title>
+  <!-- Load Inter font and Tailwind CSS for mobile-first student UI -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#4f46e5',
+              600: '#4338ca',
+              700: '#3730a3',
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    /* Ensure smooth touch scrolling and clean mobile frame centering on larger screens */
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen flex justify-center selection:bg-indigo-100 selection:text-indigo-900">
+  <!-- Mobile-first container (full width on phones, centered app shell on desktop) -->
+  <div id="app" class="w-full max-w-md bg-slate-50 min-h-screen flex flex-col shadow-xl border-x border-slate-200/80 relative">
+    <!-- Top Header -->
+    <header class="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3.5 flex items-center justify-between rounded-b-2xl">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-sm" aria-hidden="true">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-base font-bold tracking-tight text-slate-900 leading-none">StudySync</h1>
+          <p id="header-subtitle" class="text-xs text-slate-500 mt-1">Upcoming deadlines & smart nudges</p>
+        </div>
+      </div>
+
+      <button
+        id="header-add-btn"
+        type="button"
+        class="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-semibold px-3 py-2 shadow-sm transition"
+        aria-label="Add new deadline or reminder"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+        <span>Add</span>
+      </button>
+    </header>
+
+    <!-- Toast / Status Banner (non-blocking feedback instead of alert/confirm) -->
+    <div id="toast-banner" class="hidden mx-4 mt-3 px-3.5 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-medium flex items-center justify-between shadow-md z-30" role="status" aria-live="polite">
+      <span id="toast-message"></span>
+      <button id="toast-close-btn" type="button" class="text-slate-300 hover:text-white ml-3 p-1" aria-label="Dismiss notification">✕</button>
+    </div>
+
+    <!-- Main Scrollable Screen Container -->
+    <main id="screen-container" class="flex-1 px-4 pt-4 pb-24 overflow-y-auto no-scrollbar">
+      <!-- SCREEN 1: Upcoming Deadlines & Smart Reminders -->
+      <section id="screen-upcoming" aria-labelledby="upcoming-heading" class="space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 id="upcoming-heading" class="text-lg font-bold text-slate-900">Upcoming Deadlines</h2>
+            <p class="text-xs text-slate-500">Sorted chronologically • Tap any item for details</p>
+          </div>
+          <span id="active-count-badge" class="text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/70 px-2.5 py-1 rounded-full">
+            0 active
+          </span>
+        </div>
+
+        <!-- Filter pills for quick scanning -->
+        <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1" role="tablist" aria-label="Filter upcoming items">
+          <button type="button" data-filter="All" class="filter-pill px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-900 text-white transition shrink-0">All</button>
+          <button type="button" data-filter="Test" class="filter-pill px-3 py-1.5 rounded-full text-xs font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition shrink-0">Tests</button>
+          <button type="button" data-filter="Assignment" class="filter-pill px-3 py-1.5 rounded-full text-xs font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition shrink-0">Assignments</button>
+          <button type="button" data-filter="Reminder" class="filter-pill px-3 py-1.5 rounded-full text-xs font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition shrink-0">Reminders</button>
+        </div>
+
+        <!-- Relevant / Urgent Strip at top of Screen 1 -->
+        <div id="urgent-spotlight" class="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/90 p-3.5 shadow-xs">
+          <div class="flex items-center justify-between mb-2">
+            <span class="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 uppercase tracking-wide">
+              <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+              Relevant Right Now
+            </span>
+            <button id="jump-relevant-btn" type="button" class="text-xs font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-950">
+              See all
+            </button>
+          </div>
+          <div id="urgent-spotlight-list" class="space-y-2"></div>
+        </div>
+
+        <!-- Chronological Active List -->
+        <div id="upcoming-list" class="space-y-2.5"></div>
+
+        <!-- Primary CTA at bottom of Screen 1 so there is always a clear next action -->
+        <div class="pt-2">
+          <button
+            id="upcoming-cta-add"
+            type="button"
+            class="w-full py-3.5 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white font-semibold text-sm shadow-sm flex items-center justify-center gap-2 transition"
+          >
+            <span>+ Add New Deadline or Reminder</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- SCREEN 2: Add Deadline / Reminder -->
+      <section id="screen-add" aria-labelledby="add-heading" class="hidden space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 id="add-heading" class="text-lg font-bold text-slate-900">Add Deadline or Reminder</h2>
+            <p class="text-xs text-slate-500">Pick when StudySync should nudge you so you don't forget</p>
+          </div>
+          <button
+            id="cancel-add-btn"
+            type="button"
+            class="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-1.5 rounded-xl transition"
+          >
+            Back
+          </button>
+        </div>
+
+        <form id="add-item-form" class="bg-white rounded-2xl border border-slate-200 p-4 space-y-4 shadow-xs" novalidate>
+          <!-- Title -->
+          <div>
+            <label for="item-title" class="block text-xs font-semibold text-slate-700 mb-1.5">
+              Title <span class="text-rose-500">*</span>
+            </label>
+            <input
+              id="item-title"
+              name="title"
+              type="text"
+              required
+              placeholder="e.g., Biology Lab Report or Calculus Quiz"
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+            <p id="title-error" class="hidden text-xs text-rose-600 mt-1 font-medium">Please enter a title for your test, assignment, or reminder.</p>
+          </div>
+
+          <!-- Type (Test / Assignment / Reminder) -->
+          <div>
+            <span class="block text-xs font-semibold text-slate-700 mb-1.5">Category Type</span>
+            <div class="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Item type">
+              <label class="cursor-pointer">
+                <input type="radio" name="type" value="Test" class="peer sr-only" />
+                <div class="text-center py-2.5 px-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 peer-checked:bg-rose-50 peer-checked:border-rose-400 peer-checked:text-rose-800 transition">
+                  📝 Test
+                </div>
+              </label>
+              <label class="cursor-pointer">
+                <input type="radio" name="type" value="Assignment" class="peer sr-only" checked />
+                <div class="text-center py-2.5 px-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 peer-checked:bg-indigo-50 peer-checked:border-indigo-400 peer-checked:text-indigo-800 transition">
+                  📚 Assignment
+                </div>
+              </label>
+              <label class="cursor-pointer">
+                <input type="radio" name="type" value="Reminder" class="peer sr-only" />
+                <div class="text-center py-2.5 px-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 peer-checked:bg-amber-50 peer-checked:border-amber-400 peer-checked:text-amber-900 transition">
+                  🔔 Reminder
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Course / Subject (optional light helper) -->
+          <div>
+            <label for="item-subject" class="block text-xs font-semibold text-slate-700 mb-1.5">
+              Subject / Class <span class="text-slate-400 font-normal">(optional)</span>
+            </label>
+            <input
+              id="item-subject"
+              name="subject"
+              type="text"
+              placeholder="e.g., Chemistry, History, Club"
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+
+          <!-- Due Date & Time -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="item-date" class="block text-xs font-semibold text-slate-700 mb-1.5">
+                Due Date <span class="text-rose-500">*</span>
+              </label>
+              <input
+                id="item-date"
+                name="dueDate"
+                type="date"
+                required
+                class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label for="item-time" class="block text-xs font-semibold text-slate-700 mb-1.5">
+                Due Time <span class="text-rose-500">*</span>
+              </label>
+              <input
+                id="item-time"
+                name="dueTime"
+                type="time"
+                required
+                class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
+          <!-- Smart Reminder / Relevance Timing -->
+          <div>
+            <label for="item-reminder" class="block text-xs font-semibold text-slate-700 mb-1.5">
+              When to Remind (Smart Relevance)
+            </label>
+            <select
+              id="item-reminder"
+              name="remindWhen"
+              class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              <option value="Morning of">Morning of (8:00 AM relevance nudge)</option>
+              <option value="1 day before" selected>1 day before (Prep reminder)</option>
+              <option value="2 hours before">2 hours before (Last-minute check)</option>
+              <option value="3 days before">3 days before (Early study heads-up)</option>
+            </select>
+          </div>
+
+          <!-- Quick note -->
+          <div>
+            <label for="item-notes" class="block text-xs font-semibold text-slate-700 mb-1.5">
+              Quick Study Note <span class="text-slate-400 font-normal">(optional)</span>
+            </label>
+            <textarea
+              id="item-notes"
+              name="notes"
+              rows="2"
+              placeholder="Chapters to cover, rubric link, or what to pack..."
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            ></textarea>
+          </div>
+
+          <button
+            type="submit"
+            class="w-full py-3.5 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white font-semibold text-sm shadow-sm transition"
+          >
+            Save to StudySync
+          </button>
+        </form>
+      </section>
+
+      <!-- SCREEN 3: Relevant Reminders & Completed -->
+      <section id="screen-review" aria-labelledby="review-heading" class="hidden space-y-5">
+        <div>
+          <h2 id="review-heading" class="text-lg font-bold text-slate-900">Relevant & Completed</h2>
+          <p class="text-xs text-slate-500">Timely nudges needing action now, plus finished work</p>
+        </div>
+
+        <!-- Sub-section A: Relevant Reminders (Due Soon / Triggered Relevance) -->
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+              Relevant Reminders Now
+            </h3>
+            <span id="relevant-count-badge" class="text-xs font-semibold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full">0</span>
+          </div>
+          <div id="relevant-list" class="space-y-2.5"></div>
+        </div>
+
+        <!-- Sub-section B: Completed Items -->
+        <div class="space-y-2.5 pt-1">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+              Completed
+            </h3>
+            <span id="completed-count-badge" class="text-xs font-semibold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full">0</span>
+          </div>
+          <div id="completed-list" class="space-y-2.5"></div>
+        </div>
+
+        <!-- Navigation helper to keep flow circular with no dead ends -->
+        <div class="pt-1 flex gap-2.5">
+          <button
+            id="review-to-upcoming-btn"
+            type="button"
+            class="flex-1 py-3 px-3 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 font-semibold text-xs transition"
+          >
+            View All Upcoming
+          </button>
+          <button
+            id="review-to-add-btn"
+            type="button"
+            class="flex-1 py-3 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition"
+          >
+            + Add New Item
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Item Detail Modal / Bottom Sheet (triggered when tapping an item on any screen) -->
+    <div id="detail-modal" class="hidden fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-[1px] flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+      <div class="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl space-y-4 border border-slate-200">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <span id="detail-badge" class="inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full mb-1.5"></span>
+            <h3 id="detail-title" class="text-lg font-bold text-slate-900 leading-snug"></h3>
+            <p id="detail-subject" class="text-xs font-medium text-slate-500 mt-0.5"></p>
+          </div>
+          <button id="detail-close-btn" type="button" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-sm font-bold" aria-label="Close details">
+            ✕
+          </button>
+        </div>
+
+        <div class="bg-slate-50 rounded-2xl p-3.5 space-y-2 text-xs border border-slate-200/70">
+          <div class="flex justify-between">
+            <span class="text-slate-500 font-medium">Due Date & Time</span>
+            <span id="detail-due" class="text-slate-900 font-semibold"></span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500 font-medium">Smart Reminder</span>
+            <span id="detail-remind" class="text-indigo-700 font-semibold"></span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500 font-medium">Status</span>
+            <span id="detail-status" class="font-semibold"></span>
+          </div>
+          <div id="detail-notes-wrap" class="pt-2 border-t border-slate-200/80">
+            <span class="block text-slate-500 font-medium mb-1">Notes</span>
+            <p id="detail-notes" class="text-slate-700 leading-relaxed"></p>
+          </div>
+        </div>
+
+        <div class="flex gap-2.5 pt-1">
+          <button
+            id="detail-toggle-complete-btn"
+            type="button"
+            class="flex-1 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-semibold text-sm transition"
+          >
+            Mark Completed
+          </button>
+          <button
+            id="detail-delete-btn"
+            type="button"
+            class="py-3 px-3.5 rounded-2xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-sm border border-rose-200 transition"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Navigation Bar (3 Core Screens) -->
+    <nav aria-label="Primary navigation" class="fixed bottom-0 w-full max-w-md bg-white/95 backdrop-blur border-t border-slate-200 px-2 py-2 grid grid-cols-3 gap-1 z-20">
+      <button
+        id="nav-upcoming"
+        type="button"
+        data-screen="upcoming"
+        class="nav-btn flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-indigo-600 bg-indigo-50/80 font-semibold text-[11px] transition"
+      >
+        <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span>Upcoming</span>
+      </button>
+
+      <button
+        id="nav-add"
+        type="button"
+        data-screen="add"
+        class="nav-btn flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 font-medium text-[11px] transition"
+      >
+        <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>Add Item</span>
+      </button>
+
+      <button
+        id="nav-review"
+        type="button"
+        data-screen="review"
+        class="nav-btn flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 font-medium text-[11px] transition"
+      >
+        <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+        <span>Relevant & Done</span>
+      </button>
+    </nav>
+  </div>
+
+  <script>
+    /**
+     * StudySync State & Logic
+     * Manages 3 core screens ('upcoming', 'add', 'review'), pre-loaded student items,
+     * localStorage persistence, smart relevance detection, and detail modal interactions.
+     */
+    (function () {
+      const STORAGE_KEY = 'studysync_items_v1';
+
+      // Helper to build relative ISO-like date strings anchored near current time so demo items always feel fresh
+      function offsetDateString(daysFromNow, hourStr = '09:00') {
+        const d = new Date();
+        d.setDate(d.getDate() + daysFromNow);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return { dueDate: `${yyyy}-${mm}-${dd}`, dueTime: hourStr };
+      }
+
+      function buildInitialItems() {
+        const d0 = offsetDateString(0, '16:30');
+        const d1 = offsetDateString(1, '10:00');
+        const d2 = offsetDateString(2, '14:00');
+        const d5 = offsetDateString(5, '09:30');
+        const past1 = offsetDateString(-1, '12:00');
+        const past3 = offsetDateString(-3, '17:00');
+
+        return [
+          {
+            id: 'seed-1',
+            title: 'Physics Lab Worksheet #4',
+            type: 'Assignment',
+            subject: 'Physics',
+            dueDate: d0.dueDate,
+            dueTime: d0.dueTime,
+            remindWhen: 'Morning of',
+            isRelevantNow: true,
+            completed: false,
+            notes: 'Submit graphs for pendulum experiment on the lab portal before 4:30 PM.',
+          },
+          {
+            id: 'seed-2',
+            title: 'Bring Scientific Calculator & Student ID',
+            type: 'Reminder',
+            subject: 'Math Midterm',
+            dueDate: d1.dueDate,
+            dueTime: d1.dueTime,
+            remindWhen: '1 day before',
+            isRelevantNow: true,
+            completed: false,
+            notes: 'Pack fresh batteries and put it inside backpack tonight.',
+          },
+          {
+            id: 'seed-3',
+            title: 'Algebra & Trigonometry Unit Test',
+            type: 'Test',
+            subject: 'Mathematics',
+            dueDate: d1.dueDate,
+            dueTime: d1.dueTime,
+            remindWhen: '1 day before',
+            isRelevantNow: false,
+            completed: false,
+            notes: 'Chapters 4–6: focus on trigonometric identities and word problems.',
+          },
+          {
+            id: 'seed-4',
+            title: 'World History Essay Outline',
+            type: 'Assignment',
+            subject: 'History',
+            dueDate: d2.dueDate,
+            dueTime: d2.dueTime,
+            remindWhen: '2 hours before',
+            isRelevantNow: false,
+            completed: false,
+            notes: 'Include thesis statement + 3 primary source bullet points.',
+          },
+          {
+            id: 'seed-5',
+            title: 'Organic Chemistry Quiz',
+            type: 'Test',
+            subject: 'Chemistry',
+            dueDate: d5.dueDate,
+            dueTime: d5.dueTime,
+            remindWhen: '3 days before',
+            isRelevantNow: false,
+            completed: false,
+            notes: 'Review functional groups and naming rules.',
+          },
+          {
+            id: 'seed-6',
+            title: 'Upload Biology Reading Notes',
+            type: 'Assignment',
+            subject: 'Biology',
+            dueDate: past1.dueDate,
+            dueTime: past1.dueTime,
+            remindWhen: '1 day before',
+            isRelevantNow: false,
+            completed: true,
+            notes: 'Cell respiration summary uploaded and confirmed.',
+          },
+          {
+            id: 'seed-7',
+            title: 'Register for Study Group Slot',
+            type: 'Reminder',
+            subject: 'Peer Prep',
+            dueDate: past3.dueDate,
+            dueTime: past3.dueTime,
+            remindWhen: 'Morning of',
+            isRelevantNow: false,
+            completed: true,
+            notes: 'Booked Thursday 5 PM table.',
+          },
+        ];
+      }
+
+      // App state
+      let state = {
+        currentScreen: 'upcoming', // 'upcoming' | 'add' | 'review'
+        filterType: 'All', // 'All' | 'Test' | 'Assignment' | 'Reminder'
+        selectedItemId: null,
+        items: [],
+      };
+
+      // Load items safely from localStorage with fallback to sample student data
+      function loadItems() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              return parsed;
+            }
+          }
+        } catch (err) {
+          console.warn('Unable to read saved StudySync items, using sample items:', err);
+        }
+        return buildInitialItems();
+      }
+
+      function saveItems() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
+        } catch (err) {
+          console.warn('Unable to persist StudySync items:', err);
+        }
+      }
+
+      // Show a friendly non-blocking toast message
+      let toastTimer = null;
+      function showToast(message) {
+        const banner = document.getElementById('toast-banner');
+        const msgEl = document.getElementById('toast-message');
+        if (!banner || !msgEl) return;
+        msgEl.textContent = message;
+        banner.classList.remove('hidden');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          banner.classList.add('hidden');
+        }, 3200);
+      }
+
+      // Determine if an active item is relevant/due soon
+      function isItemRelevant(item) {
+        if (item.completed) return false;
+        if (item.isRelevantNow) return true;
+        const now = new Date();
+        const due = new Date(`${item.dueDate}T${item.dueTime || '23:59'}`);
+        if (isNaN(due.getTime())) return false;
+        const diffHours = (due.getTime() - now.getTime()) / (1000 * 60 * 60);
+        return diffHours <= 48; // Due within ~2 days or already due
+      }
+
+      // Sort items chronologically by due date & time
+      function sortChronologically(items) {
+        return [...items].sort((a, b) => {
+          const da = new Date(`${a.dueDate}T${a.dueTime || '23:59'}`).getTime() || 0;
+          const db = new Date(`${b.dueDate}T${b.dueTime || '23:59'}`).getTime() || 0;
+          return da - db;
+        });
+      }
+
+      // Format date/time cleanly for student readability
+      function formatDueLabel(dueDate, dueTime) {
+        const d = new Date(`${dueDate}T${dueTime || '09:00'}`);
+        if (isNaN(d.getTime())) return `${dueDate} · ${dueTime || ''}`;
+
+        const today = new Date();
+        const tomorrow = new Date();
+        tomorrow.setDate(today.getDate() + 1);
+
+        const sameDay = (a, b) =>
+          a.getFullYear() === b.getFullYear() &&
+          a.getMonth() === b.getMonth() &&
+          a.getDate() === b.getDate();
+
+        const timeFormatted = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        if (sameDay(d, today)) return `Today · ${timeFormatted}`;
+        if (sameDay(d, tomorrow)) return `Tomorrow · ${timeFormatted}`;
+
+        const dateFormatted = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        return `${dateFormatted} · ${timeFormatted}`;
+      }
+
+      // Badge styling by type
+      function getTypeBadgeClasses(type) {
+        switch (type) {
+          case 'Test':
+            return 'bg-rose-50 text-rose-700 border border-rose-200/80';
+          case 'Reminder':
+            return 'bg-amber-50 text-amber-800 border border-amber-200/80';
+          case 'Assignment':
+          default:
+            return 'bg-indigo-50 text-indigo-700 border border-indigo-200/80';
+        }
+      }
+
+      // Switch active screen (1, 2, or 3)
+      function navigateTo(screenName) {
+        state.currentScreen = screenName;
+
+        const screens = {
+          upcoming: document.getElementById('screen-upcoming'),
+          add: document.getElementById('screen-add'),
+          review: document.getElementById('screen-review'),
+        };
+
+        Object.entries(screens).forEach(([key, el]) => {
+          if (!el) return;
+          el.classList.toggle('hidden', key !== screenName);
+        });
+
+        // Update bottom nav active state
+        document.querySelectorAll('.nav-btn').forEach((btn) => {
+          const isActive = btn.dataset.screen === screenName;
+          btn.classList.toggle('text-indigo-600', isActive);
+          btn.classList.toggle('bg-indigo-50/80', isActive);
+          btn.classList.toggle('font-semibold', isActive);
+          btn.classList.toggle('text-slate-500', !isActive);
+          btn.classList.toggle('font-medium', !isActive);
+        });
+
+        // Update header subtitle
+        const subtitle = document.getElementById('header-subtitle');
+        if (subtitle) {
+          if (screenName === 'upcoming') subtitle.textContent = 'Upcoming deadlines & smart nudges';
+          if (screenName === 'add') subtitle.textContent = 'Create a test, assignment, or reminder';
+          if (screenName === 'review') subtitle.textContent = 'Relevant nudges & completed work';
+        }
+
+        // Default form date/time when opening Add screen if empty
+        if (screenName === 'add') {
+          const dateInput = document.getElementById('item-date');
+          const timeInput = document.getElementById('item-time');
+          if (dateInput && !dateInput.value) {
+            const next = offsetDateString(1, '15:00');
+            dateInput.value = next.dueDate;
+          }
+          if (timeInput && !timeInput.value) {
+            timeInput.value = '15:00';
+          }
+        }
+
+        render();
+        const mainEl = document.getElementById('screen-container');
+        if (mainEl) mainEl.scrollTop = 0;
+      }
+
+      // Toggle completion status of an item
+      function toggleComplete(itemId, event) {
+        if (event) event.stopPropagation();
+        const item = state.items.find((i) => i.id === itemId);
+        if (!item) return;
+        item.completed = !item.completed;
+        if (item.completed) {
+          item.isRelevantNow = false;
+        }
+        saveItems();
+        render();
+
+        // Keep modal in sync if open
+        if (state.selectedItemId === itemId) {
+          openDetailModal(itemId);
+        }
+
+        showToast(item.completed ? `Marked "${item.title}" as done!` : `Moved "${item.title}" back to upcoming.`);
+      }
+
+      // Delete an item
+      function deleteItem(itemId) {
+        const target = state.items.find((i) => i.id === itemId);
+        state.items = state.items.filter((i) => i.id !== itemId);
+        saveItems();
+        closeDetailModal();
+        render();
+        if (target) {
+          showToast(`Removed "${target.title}".`);
+        }
+      }
+
+      // Open detail modal for an item
+      function openDetailModal(itemId) {
+        const item = state.items.find((i) => i.id === itemId);
+        if (!item) return;
+        state.selectedItemId = itemId;
+
+        const modal = document.getElementById('detail-modal');
+        const badge = document.getElementById('detail-badge');
+        const title = document.getElementById('detail-title');
+        const subject = document.getElementById('detail-subject');
+        const due = document.getElementById('detail-due');
+        const remind = document.getElementById('detail-remind');
+        const status = document.getElementById('detail-status');
+        const notes = document.getElementById('detail-notes');
+        const toggleBtn = document.getElementById('detail-toggle-complete-btn');
+
+        if (badge) {
+          badge.className = `inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full mb-1.5 ${getTypeBadgeClasses(item.type)}`;
+          badge.textContent = item.type;
+        }
+        if (title) title.textContent = item.title;
+        if (subject) subject.textContent = item.subject ? `Subject: ${item.subject}` : 'General Student Item';
+        if (due) due.textContent = formatDueLabel(item.dueDate, item.dueTime);
+        if (remind) remind.textContent = item.remindWhen;
+        if (status) {
+          status.textContent = item.completed ? 'Completed ✓' : isItemRelevant(item) ? 'Relevant / Due Soon' : 'Scheduled';
+          status.className = `font-semibold ${item.completed ? 'text-emerald-700' : isItemRelevant(item) ? 'text-amber-700' : 'text-slate-800'}`;
+        }
+        if (notes) notes.textContent = item.notes && item.notes.trim() ? item.notes : 'No extra notes added.';
+        if (toggleBtn) {
+          toggleBtn.textContent = item.completed ? 'Mark as Incomplete' : 'Mark Completed';
+          toggleBtn.className = item.completed
+            ? 'flex-1 py-3 px-4 rounded-2xl bg-slate-800 hover:bg-slate-900 active:scale-[0.99] text-white font-semibold text-sm transition'
+            : 'flex-1 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-semibold text-sm transition';
+        }
+
+        if (modal) modal.classList.remove('hidden');
+      }
+
+      function closeDetailModal() {
+        state.selectedItemId = null;
+        const modal = document.getElementById('detail-modal');
+        if (modal) modal.classList.add('hidden');
+      }
+
+      // Render a card for Screen 1 (Upcoming)
+      function createUpcomingCard(item) {
+        const relevant = isItemRelevant(item);
+        const card = document.createElement('div');
+        card.className = `bg-white rounded-2xl border ${
+          relevant ? 'border-amber-300 ring-1 ring-amber-200/60' : 'border-slate-200'
+        } p-3.5 shadow-xs hover:border-indigo-300 transition cursor-pointer flex items-start gap-3`;
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.setAttribute('aria-label', `Open details for ${item.title}`);
+
+        card.addEventListener('click', () => openDetailModal(item.id));
+        card.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openDetailModal(item.id);
+          }
+        });
+
+        // Completion checkbox button
+        const checkBtn = document.createElement('button');
+        checkBtn.type = 'button';
+        checkBtn.className =
+          'mt-0.5 w-6 h-6 rounded-full border-2 border-slate-300 hover:border-emerald-500 hover:bg-emerald-50 flex items-center justify-center shrink-0 transition';
+        checkBtn.setAttribute('aria-label', `Mark ${item.title} complete`);
+        checkBtn.addEventListener('click', (e) => toggleComplete(item.id, e));
+
+        // Content block
+        const body = document.createElement('div');
+        body.className = 'flex-1 min-w-0';
+
+        const topRow = document.createElement('div');
+        topRow.className = 'flex items-center gap-1.5 flex-wrap mb-1';
+
+        const typeSpan = document.createElement('span');
+        typeSpan.className = `text-[11px] font-bold px-2 py-0.5 rounded-full ${getTypeBadgeClasses(item.type)}`;
+        typeSpan.textContent = item.type;
+        topRow.appendChild(typeSpan);
+
+        if (relevant) {
+          const relSpan = document.createElement('span');
+          relSpan.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900';
+          relSpan.textContent = `Nudge: ${item.remindWhen}`;
+          topRow.appendChild(relSpan);
+        }
+
+        if (item.subject) {
+          const subjSpan = document.createElement('span');
+          subjSpan.className = 'text-[11px] font-medium text-slate-400';
+          subjSpan.textContent = `• ${item.subject}`;
+          topRow.appendChild(subjSpan);
+        }
+
+        const titleEl = document.createElement('h3');
+        titleEl.className = 'text-sm font-bold text-slate-900 truncate';
+        titleEl.textContent = item.title;
+
+        const metaEl = document.createElement('p');
+        metaEl.className = 'text-xs text-slate-500 mt-1 flex items-center gap-1.5';
+        metaEl.textContent = `Due ${formatDueLabel(item.dueDate, item.dueTime)}`;
+
+        body.appendChild(topRow);
+        body.appendChild(titleEl);
+        body.appendChild(metaEl);
+
+        card.appendChild(checkBtn);
+        card.appendChild(body);
+        return card;
+      }
+
+      // Render Screen 1, Screen 2 state indicators, and Screen 3
+      function render() {
+        const activeItems = sortChronologically(state.items.filter((i) => !i.completed));
+        const completedItems = sortChronologically(state.items.filter((i) => i.completed)).reverse();
+        const relevantItems = activeItems.filter((i) => isItemRelevant(i));
+
+        // Update badges
+        const activeBadge = document.getElementById('active-count-badge');
+        if (activeBadge) activeBadge.textContent = `${activeItems.length} active`;
+
+        const relBadge = document.getElementById('relevant-count-badge');
+        if (relBadge) relBadge.textContent = String(relevantItems.length);
+
+        const compBadge = document.getElementById('completed-count-badge');
+        if (compBadge) compBadge.textContent = String(completedItems.length);
+
+        // Filter pill styles
+        document.querySelectorAll('.filter-pill').forEach((pill) => {
+          const active = pill.dataset.filter === state.filterType;
+          pill.className = active
+            ? 'filter-pill px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-900 text-white transition shrink-0'
+            : 'filter-pill px-3 py-1.5 rounded-full text-xs font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition shrink-0';
+        });
+
+        // Urgent spotlight on Screen 1
+        const spotlightWrap = document.getElementById('urgent-spotlight');
+        const spotlightList = document.getElementById('urgent-spotlight-list');
+        if (spotlightWrap && spotlightList) {
+          spotlightList.innerHTML = '';
+          if (relevantItems.length === 0) {
+            spotlightWrap.classList.add('hidden');
+          } else {
+            spotlightWrap.classList.remove('hidden');
+            relevantItems.slice(0, 2).forEach((item) => {
+              const row = document.createElement('div');
+              row.className = 'bg-white/90 rounded-xl px-3 py-2 border border-amber-200/80 flex items-center justify-between gap-2 cursor-pointer hover:bg-white transition';
+              row.addEventListener('click', () => openDetailModal(item.id));
+
+              const left = document.createElement('div');
+              left.className = 'min-w-0';
+              const t = document.createElement('p');
+              t.className = 'text-xs font-bold text-slate-900 truncate';
+              t.textContent = item.title;
+              const sub = document.createElement('p');
+              sub.className = 'text-[11px] text-amber-900/80';
+              sub.textContent = `${formatDueLabel(item.dueDate, item.dueTime)} · ${item.remindWhen}`;
+              left.appendChild(t);
+              left.appendChild(sub);
+
+              const doneBtn = document.createElement('button');
+              doneBtn.type = 'button';
+              doneBtn.className = 'text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg shrink-0 transition';
+              doneBtn.textContent = 'Done';
+              doneBtn.addEventListener('click', (e) => toggleComplete(item.id, e));
+
+              row.appendChild(left);
+              row.appendChild(doneBtn);
+              spotlightList.appendChild(row);
+            });
+          }
+        }
+
+        // Main chronological list on Screen 1
+        const upcomingList = document.getElementById('upcoming-list');
+        if (upcomingList) {
+          upcomingList.innerHTML = '';
+          const filtered =
+            state.filterType === 'All'
+              ? activeItems
+              : activeItems.filter((item) => item.type === state.filterType);
+
+          if (filtered.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'bg-white rounded-2xl border border-dashed border-slate-300 p-6 text-center space-y-2';
+            empty.innerHTML = `
+              <p class="text-sm font-semibold text-slate-700">No ${state.filterType === 'All' ? 'upcoming' : state.filterType.toLowerCase()} items right now</p>
+              <p class="text-xs text-slate-500">Tap "+ Add" to schedule your next test, assignment, or reminder.</p>
+            `;
+            upcomingList.appendChild(empty);
+          } else {
+            filtered.forEach((item) => upcomingList.appendChild(createUpcomingCard(item)));
+          }
+        }
+
+        // Screen 3: Relevant Reminders list
+        const relevantList = document.getElementById('relevant-list');
+        if (relevantList) {
+          relevantList.innerHTML = '';
+          if (relevantItems.length === 0) {
+            relevantList.innerHTML = `
+              <div class="bg-white rounded-2xl border border-slate-200 p-4 text-center text-xs text-slate-500">
+                No urgent reminders triggered right now. You're all caught up!
+              </div>
+            `;
+          } else {
+            relevantItems.forEach((item) => relevantList.appendChild(createUpcomingCard(item)));
+          }
+        }
+
+        // Screen 3: Completed list
+        const completedList = document.getElementById('completed-list');
+        if (completedList) {
+          completedList.innerHTML = '';
+          if (completedItems.length === 0) {
+            completedList.innerHTML = `
+              <div class="bg-white rounded-2xl border border-slate-200 p-4 text-center text-xs text-slate-500">
+                Nothing marked completed yet. Tap a circle on any task to check it off.
+              </div>
+            `;
+          } else {
+            completedItems.forEach((item) => {
+              const card = document.createElement('div');
+              card.className = 'bg-white/80 rounded-2xl border border-slate-200/80 p-3.5 flex items-center justify-between gap-3 cursor-pointer hover:bg-white transition';
+              card.addEventListener('click', () => openDetailModal(item.id));
+
+              const left = document.createElement('div');
+              left.className = 'min-w-0';
+
+              const titleEl = document.createElement('p');
+              titleEl.className = 'text-sm font-semibold text-slate-500 line-through truncate';
+              titleEl.textContent = item.title;
+
+              const metaEl = document.createElement('p');
+              metaEl.className = 'text-[11px] text-slate-400 mt-0.5';
+              metaEl.textContent = `${item.type} · ${item.subject || 'General'}`;
+
+              left.appendChild(titleEl);
+              left.appendChild(metaEl);
+
+              const undoBtn = document.createElement('button');
+              undoBtn.type = 'button';
+              undoBtn.className = 'text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-xl shrink-0 transition';
+              undoBtn.textContent = 'Undo';
+              undoBtn.addEventListener('click', (e) => toggleComplete(item.id, e));
+
+              card.appendChild(left);
+              card.appendChild(undoBtn);
+              completedList.appendChild(card);
+            });
+          }
+        }
+      }
+
+      // Handle Add Form submission
+      function handleFormSubmit(e) {
+        e.preventDefault();
+        const titleInput = document.getElementById('item-title');
+        const typeInput = document.querySelector('input[name="type"]:checked');
+        const subjectInput = document.getElementById('item-subject');
+        const dateInput = document.getElementById('item-date');
+        const timeInput = document.getElementById('item-time');
+        const remindInput = document.getElementById('item-reminder');
+        const notesInput = document.getElementById('item-notes');
+        const titleError = document.getElementById('title-error');
+
+        const title = titleInput ? titleInput.value.trim() : '';
+        if (!title) {
+          if (titleError) titleError.classList.remove('hidden');
+          if (titleInput) titleInput.focus();
+          return;
+        }
+        if (titleError) titleError.classList.add('hidden');
+
+        const fallbackDue = offsetDateString(1, '15:00');
+        const dueDate = dateInput && dateInput.value ? dateInput.value : fallbackDue.dueDate;
+        const dueTime = timeInput && timeInput.value ? timeInput.value : fallbackDue.dueTime;
+        const remindWhen = remindInput ? remindInput.value : '1 day before';
+
+        const newItem = {
+          id: `item-${Date.now()}`,
+          title,
+          type: typeInput ? typeInput.value : 'Assignment',
+          subject: subjectInput ? subjectInput.value.trim() : '',
+          dueDate,
+          dueTime,
+          remindWhen,
+          isRelevantNow: remindWhen === 'Morning of' || remindWhen === '2 hours before',
+          completed: false,
+          notes: notesInput ? notesInput.value.trim() : '',
+        };
+
+        state.items.push(newItem);
+        saveItems();
+
+        // Reset form fields cleanly
+        e.target.reset();
+        const checkedDefault = document.querySelector('input[name="type"][value="Assignment"]');
+        if (checkedDefault) checkedDefault.checked = true;
+
+        navigateTo('upcoming');
+        showToast(`Added "${newItem.title}" (${remindWhen})`);
+      }
+
+      // Wire up all event listeners on DOMContentLoaded
+      document.addEventListener('DOMContentLoaded', () => {
+        state.items = loadItems();
+        saveItems();
+
+        // Bottom & top navigation
+        document.querySelectorAll('.nav-btn').forEach((btn) => {
+          btn.addEventListener('click', () => navigateTo(btn.dataset.screen));
+        });
+
+        document.getElementById('header-add-btn')?.addEventListener('click', () => navigateTo('add'));
+        document.getElementById('upcoming-cta-add')?.addEventListener('click', () => navigateTo('add'));
+        document.getElementById('cancel-add-btn')?.addEventListener('click', () => navigateTo('upcoming'));
+        document.getElementById('jump-relevant-btn')?.addEventListener('click', () => navigateTo('review'));
+        document.getElementById('review-to-upcoming-btn')?.addEventListener('click', () => navigateTo('upcoming'));
+        document.getElementById('review-to-add-btn')?.addEventListener('click', () => navigateTo('add'));
+
+        // Filter pills
+        document.querySelectorAll('.filter-pill').forEach((pill) => {
+          pill.addEventListener('click', () => {
+            state.filterType = pill.dataset.filter || 'All';
+            render();
+          });
+        });
+
+        // Form submit
+        document.getElementById('add-item-form')?.addEventListener('submit', handleFormSubmit);
+        document.getElementById('item-title')?.addEventListener('input', () => {
+          document.getElementById('title-error')?.classList.add('hidden');
+        });
+
+        // Detail modal controls
+        document.getElementById('detail-close-btn')?.addEventListener('click', closeDetailModal);
+        document.getElementById('detail-modal')?.addEventListener('click', (e) => {
+          if (e.target === e.currentTarget) closeDetailModal();
+        });
+        document.getElementById('detail-toggle-complete-btn')?.addEventListener('click', () => {
+          if (state.selectedItemId) toggleComplete(state.selectedItemId);
+        });
+        document.getElementById('detail-delete-btn')?.addEventListener('click', () => {
+          if (state.selectedItemId) deleteItem(state.selectedItemId);
+        });
+ // Toast dismiss
+        document.getElementById('toast-close-btn')?.addEventListener('click', () => {
+          document.getElementById('toast-banner')?.classList.add('hidden');
+        });
+
+        render();
+      });
+    })();
+  </script>
+</body>
+</html>
